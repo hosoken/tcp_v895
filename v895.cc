@@ -3,10 +3,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
+#include <errno.h>
 #include <fstream>
 
 #define A32 2
@@ -19,7 +16,6 @@
 
 int vme_write(int sock,int am, int dm, unsigned int address, unsigned int value);
 int vme_read(int sock, int am, int dm, unsigned int address, unsigned int* value);
-int connect(int sock, const char *host, int port, double timeout_sec);
 
 int main(int argc, char *argv[])
 {
@@ -27,12 +23,29 @@ int main(int argc, char *argv[])
   std::ifstream ifs(argv[1]);
   if(!ifs) {
     printf("can not open %s\n",argv[1]);
-    exit(EXIT_FAILURE);
+    return 0;
   }
 
+  //connect socket
+  char host[]        = "192.168.30.41";
+  int port           = 24;
+  double timeout_sec = 0.5;
+  
+  struct timeval tv={(int)timeout_sec, (timeout_sec-(int)timeout_sec)*1000000.};
   int sock = socket(AF_INET, SOCK_STREAM, 0);
-  connect(sock, "192.168.30.41", 24, 0.5);    
- 
+  setsockopt( sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv) );
+
+  struct sockaddr_in addr;
+  addr.sin_family       = AF_INET;
+  addr.sin_port         = htons(port);
+  addr.sin_addr.s_addr  = inet_addr(host);
+
+  if(connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0){
+    printf("cannot connect to %s:%d errno:%d\n",host,port,errno);
+    close(sock);
+    return 0;
+  }
+
   //read file and setting
   unsigned int vme_addr=0;
   std::string line;
@@ -94,35 +107,6 @@ int main(int argc, char *argv[])
 /////////////////////////////////////////////////////////////////////////////////////////////
 // internal functions
 /////////////////////////////////////////////////////////////////////////////////////////////
-
-int connect(int sock, const char *host, int port, double timeout_sec)
-{
-  struct timeval tv={(int)timeout_sec, (timeout_sec-(int)timeout_sec)*1000000.};
-  
-  struct sockaddr_in addr;
-  addr.sin_family       = AF_INET;
-  addr.sin_port         = htons(port);
-  addr.sin_addr.s_addr  = inet_addr(host);
-
-  fd_set set;
-  FD_ZERO(&set);
-  FD_SET(sock, &set);
-
-  int flags = fcntl(sock, F_GETFL, NULL);
-  fcntl(sock, F_SETFL, flags | O_NONBLOCK); 
-
-  connect(sock, (struct sockaddr*)&addr, sizeof(addr));
-
-  if(select(sock+1, NULL, &set, NULL, &tv) < 1){
-    printf("cannot connect to %s:%d\n",host,port);
-    close(sock);
-    exit(0);
-  }
-
-  fcntl(sock, F_SETFL, flags);
-  printf("#socket open\n");
-  return 0;
-}
 
 
 struct sitcp_vme_master_header{
