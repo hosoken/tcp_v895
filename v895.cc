@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
   addr.sin_addr.s_addr  = inet_addr(host);
 
   if(connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0){
-    printf("cannot connect to %s:%d errno:%d\n",host,port,errno);
+    printf("cannot connect to %s:%d %s(%d)\n",host,port,strerror(errno),errno);
     close(sock);
     return 0;
   }
